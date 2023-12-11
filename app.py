@@ -2,7 +2,7 @@ from flask import Flask
 from flask_jwt_extended import JWTManager
 from flask_restful import Api
 from config import Config
-from memo import MemoListResource, MemoResource
+from resources.memo import MemoListResource, MemoResource
 
 from resources.user import FollowResource, UserLoginResource, UserLogoutResource, UserRegisterResource
 # 로그아웃 관련된 임포트문
