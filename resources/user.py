@@ -149,13 +149,9 @@ class UserLogoutResource(Resource) :
 class UserFollowResource(Resource) :
 
     @jwt_required()
-    def post(self) :
-
-        data = request.get_json()
+    def post(self, followee_id) :
         
         user_id = get_jwt_identity()
-
-        print(data)
 
         try :
             
@@ -167,7 +163,7 @@ class UserFollowResource(Resource) :
                         (%s,%s);'''
             
             record = (user_id,
-                      data['followee_id'])
+                      followee_id)
             
             cursor = connection.cursor()
             cursor.execute(query, record)
@@ -185,10 +181,6 @@ class UserFollowResource(Resource) :
         return {'result':'success'}, 200
     
 
-
-    
-
-class UserUnFollowResource(Resource) :
 
     @jwt_required()
     def delete(self, followee_id) :
@@ -220,5 +212,56 @@ class UserUnFollowResource(Resource) :
 
         return {'result':'success'}, 200
     
-
     
+class UserFollowMemoResource(Resource):
+
+    @jwt_required()
+    def get(self) :
+        
+        offset = request.args.get('offset')
+        limit = request.args.get('limit')
+        user_id = get_jwt_identity()
+
+
+        try : 
+
+            connection = get_connection()
+
+            query = '''select m.id as memoId, m.userId, u.nickname,
+                                m.title, m.date, m.content, m.createdAt, m.updatedAt 
+                        from memo m
+                        join follows f
+                        on m.userId = f.followee_id
+                        join user u
+                        on u.id = f.followee_id
+                        where f.follower_id=%s and m.date > now()
+                        order by m.date asc
+                        limit '''+ offset +''', '''+ limit +''';'''
+            
+            record = (user_id, )
+
+            cursor = connection.cursor(dictionary=True)
+            cursor.execute(query, record)
+            # 데이터 있는 것을 가져오는 것이라서 commit 필요가 없음.
+
+            result_list = cursor.fetchall()
+
+            cursor.close()
+            connection.close()           
+
+            i = 0
+            for row in result_list :
+                result_list[i]['date'] = row['date'].isoformat()
+                result_list[i]['createdAt'] = row['createdAt'].isoformat()
+                result_list[i]['updatedAt'] = row['updatedAt'].isoformat()
+                i = i + 1
+
+        except Error as e :
+            print(e)
+            cursor.close()
+            connection.close()   
+            return{'error':str(e)}, 500
+
+        return {'result':'success',
+                'items' : result_list,
+                'count' : len(result_list)}, 500
