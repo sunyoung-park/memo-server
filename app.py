@@ -4,7 +4,7 @@ from flask_restful import Api
 from config import Config
 from memo import MemoListResource, MemoResource
 
-from resources.user import UserFollowMemoResource, UserFollowResource, UserLoginResource, UserLogoutResource, UserRegisterResource
+from resources.user import FollowResource, UserLoginResource, UserLogoutResource, UserRegisterResource
 # 로그아웃 관련된 임포트문
 from resources.user import jwt_blocklist
 
@@ -28,8 +28,7 @@ api.add_resource(UserLogoutResource,'/user/logout')
 api.add_resource(MemoListResource,'/memo')
 
 api.add_resource(MemoResource,'/memos/<int:memo_id>')
-api.add_resource(UserFollowResource,'/user/follows/<int:followee_id>')
-api.add_resource(UserFollowMemoResource,'/user/follows/memo')
+api.add_resource(FollowResource,'/user/follows/<int:followee_id>')
 
 
 if __name__ =='__main__' :

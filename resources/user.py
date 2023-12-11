@@ -1,5 +1,5 @@
+import datetime
 from flask import request
-from flask_restful import Resource
 from flask_jwt_extended import create_access_token, get_jwt, get_jwt_identity, jwt_required
 from flask_restful import Resource
 from mysql_connection import get_connection
@@ -8,9 +8,12 @@ from mysql.connector import Error
 from email_validator import validate_email, EmailNotValidError
 
 from utils import check_password, hash_password
+        # 이메일주소 확인하는 라이브러리 설치
+
+#필수 import 문
 
 class UserRegisterResource(Resource) :
-    
+
     def post(self) :
 
         # 1. 클라이언트가 보낸 데이터를 받는다.
@@ -39,10 +42,10 @@ class UserRegisterResource(Resource) :
         try : 
             connection = get_connection()
             query = '''insert into user
-                        (nickname, email, password)
+                        (username, email, password)
                         values
                         (%s,%s,%s);'''
-            record = (data['nickname'],
+            record = (data['username'],
                       data['email'],
                     password) # 암호화된 비밀번호의 변수를 넣어야함 딕셔너리 X
             
@@ -51,7 +54,7 @@ class UserRegisterResource(Resource) :
             connection.commit()
 
             #### 테이블에 방금 insert한 데이터의
-            #### 아이디를 가져오는 방법(집어 넣고 동시에 가져오기)
+            #### 아이디를 가져오는 방법
 
             user_id = cursor.lastrowid
 
@@ -70,9 +73,11 @@ class UserRegisterResource(Resource) :
         access_token = create_access_token(user_id)
 
         # 7. 토큰을 클라이언트에게 준다. response
-        return {'result':'success','accessToken':access_token}, 200
-    
-    
+        return {'result':'success','access_token':access_token}, 200
+
+
+
+
 class UserLoginResource(Resource) :
 
     def post(self) : 
@@ -92,7 +97,9 @@ class UserLoginResource(Resource) :
             cursor = connection.cursor(dictionary=True) #sql select 할 땐 꼭 dictionary=True
             cursor.execute(query,record)
 
-            result_list = cursor.fetchall() #list 형식으로 리턴
+            result_list = cursor.fetchall()
+
+            print(result_list)
 
             cursor.close()
             connection.close()
@@ -128,12 +135,13 @@ class UserLoginResource(Resource) :
         # access_token = create_access_token(result_list[0]['id'], expires_delta= datetime.timedelta(minutes=2))
         # 토큰 유효기간 만요 시킬 때 datetime.timedelta(파라미터 시분초 등등 변경 가능)
                 
-        return {'result':'success','accessToken':access_token}, 200
-    
+        return {'result':'success','access_token':access_token}, 200
+
 
 jwt_blocklist = set()
 class UserLogoutResource(Resource) :
-    
+
+
     @jwt_required()
     def delete(self) :
         
@@ -145,123 +153,49 @@ class UserLogoutResource(Resource) :
         return {"result" : "success"}, 200
     
 
-
-class UserFollowResource(Resource) :
+class FollowResource(Resource) :
 
     @jwt_required()
     def post(self, followee_id) :
-        
+
         user_id = get_jwt_identity()
 
         try :
-            
             connection = get_connection()
-
-            query ='''insert into follows
-                        (follower_id,followee_id)
-                        values
-                        (%s,%s);'''
-            
-            record = (user_id,
-                      followee_id)
-            
+            query = '''insert into follow 
+                    (followerId, followeeId)
+                    values
+                    (%s, %s);'''
+            record = (user_id, followee_id)
             cursor = connection.cursor()
             cursor.execute(query, record)
             connection.commit()
-
             cursor.close()
             connection.close()
 
-        except Error as e :
+        except Error as e:
             print(e)
-            cursor.close()
-            connection.close()
-            return{'result':'fail','error':str(e)}, 500
-
-        return {'result':'success'}, 200
+            return {'result':'fail', 'error':str(e)}, 500
+        
+        return {'result':'success'}
     
-
-
     @jwt_required()
     def delete(self, followee_id) :
-        
         user_id = get_jwt_identity()
 
         try :
-            
             connection = get_connection()
-
-            query ='''delete from follows
-                    where follower_id = %s and followee_id =%s;;'''
-            
-            record = (user_id,
-                      followee_id)
-            
+            query = '''delete from follow
+                    where followerId = %s and followeeId = %s;'''
+            record = (user_id, followee_id)
             cursor = connection.cursor()
             cursor.execute(query, record)
             connection.commit()
-
             cursor.close()
             connection.close()
 
-        except Error as e :
+        except Error as e:
             print(e)
-            cursor.close()
-            connection.close()
-            return{'result':'fail','error':str(e)}, 500
-
-        return {'result':'success'}, 200
-    
-    
-class UserFollowMemoResource(Resource):
-
-    @jwt_required()
-    def get(self) :
+            return {'result':'fail', 'error':str(e)}, 500
         
-        offset = request.args.get('offset')
-        limit = request.args.get('limit')
-        user_id = get_jwt_identity()
-
-
-        try : 
-
-            connection = get_connection()
-
-            query = '''select m.id as memoId, m.userId, u.nickname,
-                                m.title, m.date, m.content, m.createdAt, m.updatedAt 
-                        from memo m
-                        join follows f
-                        on m.userId = f.followee_id
-                        join user u
-                        on u.id = f.followee_id
-                        where f.follower_id=%s and m.date > now()
-                        order by m.date asc
-                        limit '''+ offset +''', '''+ limit +''';'''
-            
-            record = (user_id, )
-
-            cursor = connection.cursor(dictionary=True)
-            cursor.execute(query, record)
-            # 데이터 있는 것을 가져오는 것이라서 commit 필요가 없음.
-
-            result_list = cursor.fetchall()
-
-            cursor.close()
-            connection.close()           
-
-            i = 0
-            for row in result_list :
-                result_list[i]['date'] = row['date'].isoformat()
-                result_list[i]['createdAt'] = row['createdAt'].isoformat()
-                result_list[i]['updatedAt'] = row['updatedAt'].isoformat()
-                i = i + 1
-
-        except Error as e :
-            print(e)
-            cursor.close()
-            connection.close()   
-            return{'error':str(e)}, 500
-
-        return {'result':'success',
-                'items' : result_list,
-                'count' : len(result_list)}, 500
+        return {'result':'success'}
